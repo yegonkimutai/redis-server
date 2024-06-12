@@ -1,17 +1,25 @@
 const net = require('net');
 const minimist = require('minimist');
 
-// Default port
+// Default port and role
 let port = 6380;
+let role = 'master';
+let masterHost = '';
+let masterPort = '';
 
 // Parse command line arguments
 const args = minimist(process.argv.slice(2));
 if (args.port) {
     port = args.port;
 }
-
-// Server role - initially, it's a master
-let role = 'master';
+if (args.replicaof) {
+    const replicaParams = args.replicaof.split(' ');
+    if (replicaParams.length === 2) {
+        role = 'slave';
+        masterHost = replicaParams[0];
+        masterPort = replicaParams[1];
+    }
+}
 
 // Sample in-memory store
 let dataStore = {};
@@ -58,5 +66,9 @@ const server = net.createServer((socket) => {
 
 // Start the server on the specified port
 server.listen(port, () => {
-    console.log(`Redis server started on port ${port}`);
+    if (role === 'slave') {
+        console.log(`Redis server started in replica mode on port ${port}, replicating from ${masterHost}:${masterPort}`);
+    } else {
+        console.log(`Redis server started on port ${port}`);
+    }
 });
