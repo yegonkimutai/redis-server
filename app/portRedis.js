@@ -7,6 +7,11 @@ let role = 'master';
 let masterHost = '';
 let masterPort = '';
 
+
+// Hardcoded replication ID and offset
+const master_replid = '8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb';
+let master_repl_offset = 0;
+
 // Parse command line arguments
 const args = minimist(process.argv.slice(2));
 if (args.port) {
@@ -32,6 +37,7 @@ const server = net.createServer((socket) => {
         switch (command[0].toUpperCase()) {
             case 'SET':
                 dataStore[command[1]] = command[2];
+                master_repl_offset += Buffer.byteLength(data);
                 socket.write('OK\n');
                 break;
             case 'GET':
@@ -42,8 +48,8 @@ const server = net.createServer((socket) => {
                     let response = '# Replication\n';
                     response += `role:${role}\n`;
                     response += 'connected_slaves:0\n';
-                    response += 'master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\n';
-                    response += 'master_repl_offset:0\n';
+                    response += `master_replid:${master_replid}\n`;
+                    response += `master_repl_offset:${master_repl_offset}\n`;
                     response += 'second_repl_offset:-1\n';
                     response += 'repl_backlog_active:0\n';
                     response += 'repl_backlog_size:1048576\n';
