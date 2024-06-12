@@ -1,14 +1,25 @@
 const net = require("net");
 
-// You can use print statements as follows for debugging, they'll be visible when running tests.
-console.log("Logs from your program will appear here!");
+const handleCommand = (command) => {
+    const args = command.trim().split(' ');
+    const cmd = args[0].toUpperCase();
+  
+    if (cmd === 'PING') {
+      return '+PONG\r\n';
+    } else if (cmd === 'ECHO' && args.length > 1) {
+      const message = args.slice(1).join(' ');
+      return `$${message.length}\r\n${message}\r\n`;
+    } else {
+      return '-ERR unknown command\r\n';
+    }
+  };
 
 // Uncomment this block to pass the first stage
 const server = net.createServer((connection) => {
   // Handle connection
   connection.on('data', (data) => {
     console.log(`Received data: ${data}`);
-    const response = '+PONG\r\n';
+    const response = handleCommand(data.toString());
     connection.write(response);
   });
 
