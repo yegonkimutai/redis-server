@@ -3,6 +3,7 @@ const net = require('net');
 // Configuration
 const masterHost = '127.0.0.1'; 
 const masterPort = 6380;
+const replicaPort = 6381;
 
 // Create a socket connection to the master
 const client = new net.Socket();
@@ -19,19 +20,36 @@ function sendPing() {
     client.write(pingMessage);
 }
 
+// Function to send REPLCONF commands
+function sendReplconfListeningPort() {
+    const replconfListeningPortMessage = '*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6381\r\n';
+    client.write(replconfListeningPortMessage);
+    console.log('REPLCONF listening-port sent to master');
+}
+
+function sendReplconfCapaPsync2() {
+    const replconfCapaPsync2Message = '*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n';
+    client.write(replconfCapaPsync2Message);
+    console.log('REPLCONF capa psync2 sent to master');
+}
+
 // Handle data received from the master
 client.on('data', (data) => {
-    console.log('Received from master:', data.toString());
-    // Handle the response here (e.g., verify it's a PONG)
-    if (data.toString().includes('PONG')) {
-        console.log('Handshake step 1: PONG received');
-        // Proceed to the next steps (REPLCONF)
-        // sendReplconf();
+    const message = data.toString();
+    console.log('Received from master:', message);
+
+    if (message.includes('PONG')) {
+        sendReplconfListeningPort();
+    } else if (message.includes('OK')) {
+        if (message.includes('REPLCONF listening-port')) {
+            console.log('Handshake step 2: REPLCONF listening-port acknowledged');
+            sendReplconfCapaPsync2();
+        } else if (message.includes('REPLCONF capa psync2')) {
+            console.log('Handshake step 3: REPLCONF capa psync2 acknowledged');
+        }
     } else {
-        console.error('Unexpected response:', data.toString());
+        console.error('Unexpected response:', message);
     }
-    // Close the connection after receiving PONG for this example
-    client.destroy();
 });
 
 // Handle connection close
