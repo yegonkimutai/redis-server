@@ -33,6 +33,13 @@ function sendReplconfCapaPsync2() {
     console.log('REPLCONF capa psync2 sent to master');
 }
 
+// Function to send PSYNC command
+function sendPsync() {
+    const psyncMessage = '*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n';
+    client.write(psyncMessage);
+    console.log('PSYNC sent to master');
+}
+
 // Handle data received from the master
 client.on('data', (data) => {
     const message = data.toString();
@@ -46,10 +53,14 @@ client.on('data', (data) => {
             sendReplconfCapaPsync2();
         } else if (message.includes('REPLCONF capa psync2')) {
             console.log('Handshake step 3: REPLCONF capa psync2 acknowledged');
+        } else if (message.startsWith('+FULLRESYNC')) {
+            console.log('PSYNC response received:', message.trim());
         }
     } else {
         console.error('Unexpected response:', message);
     }
+
+    client.destroy();
 });
 
 // Handle connection close
