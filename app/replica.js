@@ -59,8 +59,6 @@ client.on('data', (data) => {
     } else {
         console.error('Unexpected response:', message);
     }
-
-    client.destroy();
 });
 
 // Handle connection close
