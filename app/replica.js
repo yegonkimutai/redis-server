@@ -2,7 +2,7 @@ const net = require('net');
 
 // Configuration
 const masterHost = '127.0.0.1'; 
-const masterPort = 6380;
+const masterPort = 6380;  // Changed to 6380
 const replicaPort = 6381;
 
 // Create a socket connection to the master
@@ -53,9 +53,12 @@ client.on('data', (data) => {
             sendReplconfCapaPsync2();
         } else if (message.includes('REPLCONF capa psync2')) {
             console.log('Handshake step 3: REPLCONF capa psync2 acknowledged');
-        } else if (message.startsWith('+FULLRESYNC')) {
-            console.log('PSYNC response received:', message.trim());
+            sendPsync();  // Make sure PSYNC is sent after REPLCONF capa psync2 is acknowledged
         }
+    } else if (message.startsWith('+FULLRESYNC')) {
+        console.log('PSYNC response received:', message.trim());
+    } else if (message.startsWith('$')) {
+        console.log('RDB file received:', message.trim());
     } else {
         console.error('Unexpected response:', message);
     }

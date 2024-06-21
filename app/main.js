@@ -6,6 +6,15 @@ const REPL_OFFSET = 0;
 const store = {};
 const expiryTimes = {};
 
+// Hex representation of an empty RDB file
+const emptyRdbFile = Buffer.from([
+    0x52, 0x45, 0x44, 0x49, 0x53, 0x30, 0x30, 0x30, // REDIS000
+    0x06, // RDB version
+    0xFF, // EOF
+    0x00, 0x00, 0x00, 0x00, // Checksum
+    0x00, 0x00, 0x00, 0x00  // Checksum
+]);
+
 // Helper function to parse RESP array
 const parseRespArray = (data) => {
     const lines = data.split('\r\n');
@@ -62,7 +71,13 @@ const handleCommand = (command) => {
     } else if (cmd === 'REPLCONF') {
         return '+OK\r\n';
     } else if (cmd === 'PSYNC' && args.length === 3) {
-        return `+FULLRESYNC ${REPL_ID} ${REPL_OFFSET}\r\n`;
+        const replid = REPL_ID;
+        const offset = REPL_OFFSET;
+        connection.write(`+FULLRESYNC ${replid} ${offset}\r\n`);
+        const lengthOfFile = emptyRdbFile.length;
+        connection.write(`$${lengthOfFile}\r\n`);
+        connection.write(emptyRdbFile);
+        return null;
     } else {
         return '-ERR unknown command\r\n';
     }
@@ -74,8 +89,10 @@ const server = net.createServer((connection) => {
 
     connection.on('data', (data) => {
         const commandArray = parseRespArray(data.toString());
-        const response = handleCommand(commandArray.join(' '));
-        connection.write(response);
+        const response = handleCommand(commandArray.join(' '), connection);
+        if (response) {
+            connection.write(response);
+        }
     });
 
     connection.on('end', () => {
