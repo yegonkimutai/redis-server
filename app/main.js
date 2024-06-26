@@ -5,6 +5,7 @@ const REPL_OFFSET = 0;
 
 const store = {};
 const expiryTimes = {};
+const replicas = [];
 
 // Hex representation of an empty RDB file
 const emptyRdbFile = Buffer.from([
@@ -28,7 +29,16 @@ const parseRespArray = (data) => {
     return command;
 };
 
-const handleCommand = (command) => {
+// Propagate write command to all connected replicas
+const propagateToReplicas = (command) => {
+    const respCommand = `*${command.length}\r\n` + command.map(arg => `$${arg.length}\r\n${arg}\r\n`).join('');
+    replicas.forEach(replica => {
+        console.log(`Propagating to replica: ${respCommand.trim()}`);
+        replica.write(respCommand)
+});
+};
+
+const handleCommand = (command, connection) => {
     const args = command.trim().split(' ');
     const cmd = args[0].toUpperCase();
 
@@ -59,6 +69,7 @@ const handleCommand = (command) => {
             };
         }
 
+        propagateToReplicas(['SET', key, value]);
         return '+OK\r\n';
     } else if (cmd === 'GET' && args.length > 1) {
         const key = args[1];
@@ -77,6 +88,7 @@ const handleCommand = (command) => {
         const lengthOfFile = emptyRdbFile.length;
         connection.write(`$${lengthOfFile}\r\n`);
         connection.write(emptyRdbFile);
+        replicas.push(connection);
         return null;
     } else {
         return '-ERR unknown command\r\n';
@@ -88,19 +100,34 @@ const server = net.createServer((connection) => {
     console.log('Replica connected');
 
     connection.on('data', (data) => {
-        const commandArray = parseRespArray(data.toString());
-        const response = handleCommand(commandArray.join(' '), connection);
-        if (response) {
-            connection.write(response);
+        try {
+            const commandArray = parseRespArray(data.toString());
+            const response = handleCommand(commandArray.join(' '), connection);
+            if (response) {
+                connection.write(response);
+            }
+        } catch (err) {
+            console.error(`Error processing command: ${err.message}`);
+            connection.write('-ERR internal server error\r\n');
         }
     });
 
     connection.on('end', () => {
         console.log('Client disconnected');
+        // Remove the connection from the replicas list
+        const index = replicas.indexOf(connection);
+        if (index !== -1) {
+            replicas.splice(index, 1);
+        }
     });
 
     connection.on('error', (err) => {
         console.error(`Connection error: ${err.message}`);
+         // Remove the connection from the replicas list on error
+         const index = replicas.indexOf(connection);
+         if (index !== -1) {
+             replicas.splice(index, 1);
+         }
     });
 });
 

@@ -2,8 +2,10 @@ const net = require('net');
 
 // Configuration
 const masterHost = '127.0.0.1'; 
-const masterPort = 6380;  // Changed to 6380
+const masterPort = 6380;
 const replicaPort = 6381;
+
+const store = {};
 
 // Create a socket connection to the master
 const client = new net.Socket();
@@ -40,6 +42,20 @@ function sendPsync() {
     console.log('PSYNC sent to master');
 }
 
+// Handle write commands
+function handleWriteCommand(commandArray) {
+    const cmd = commandArray[0].toUpperCase();
+
+    if (cmd === 'SET' && commandArray.length >= 3) {
+        const key = commandArray[1];
+        const value = commandArray[2];
+        store[key] = value;
+        console.log(`SET command received. Key: ${key}, Value: ${value}`);
+    } else {
+        console.log('Unknown write command:', commandArray);
+    }
+}
+
 // Handle data received from the master
 client.on('data', (data) => {
     const message = data.toString();
@@ -53,12 +69,22 @@ client.on('data', (data) => {
             sendReplconfCapaPsync2();
         } else if (message.includes('REPLCONF capa psync2')) {
             console.log('Handshake step 3: REPLCONF capa psync2 acknowledged');
-            sendPsync();  // Make sure PSYNC is sent after REPLCONF capa psync2 is acknowledged
+            sendPsync();
         }
     } else if (message.startsWith('+FULLRESYNC')) {
         console.log('PSYNC response received:', message.trim());
     } else if (message.startsWith('$')) {
         console.log('RDB file received:', message.trim());
+    } else if (message.startsWith('*')) {
+        const lines = message.split('\r\n');
+        const length = parseInt(lines[0].substring(1));
+        const commandArray = [];
+        for (let i = 1; i < lines.length; i += 2) {
+            if (lines[i][0] === '$') {
+                commandArray.push(lines[i + 1]);
+            }
+        }
+        handleWriteCommand(commandArray);
     } else {
         console.error('Unexpected response:', message);
     }
