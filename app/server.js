@@ -10,6 +10,10 @@ let port = 6379;
 let role = 'master';
 let replicaOf = null;
 
+// Initialize master replication ID and offset
+const masterReplId = '8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb'; // Hardcoded replication ID
+let masterReplOffset = 0;
+
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--port' && args[i + 1]) {
         port = parseInt(args[i + 1], 10);
@@ -74,6 +78,11 @@ const server = net.createServer((socket) => {
 
             store[key] = { value, expiry };
             socket.write('+OK\r\n');
+
+            // Increment master replication offset
+            if (role === 'master') {
+                masterReplOffset += Buffer.byteLength(data);
+            }
         } else if (command === 'GET') {
             const key = args[0];
             if (isExpired(key)) {
@@ -83,7 +92,10 @@ const server = net.createServer((socket) => {
                 socket.write(`$${value.length}\r\n${value}\r\n`);
             }
         } else if (command === 'INFO' && args[0].toUpperCase() === 'REPLICATION') {
-            const infoResponse = `role:${role}\r\n`;
+            let infoResponse = `role:${role}\r\n`;
+            if (role === 'master') {
+                infoResponse += `master_replid:${masterReplId}\r\nmaster_repl_offset:${masterReplOffset}\r\n`;
+            }
             socket.write(`$${infoResponse.length}\r\n${infoResponse}\r\n`);
         } else {
             socket.write('-ERR unknown command\r\n');

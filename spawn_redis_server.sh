@@ -2,7 +2,7 @@
 
 # Extract port and replicaof arguments
 PORT=6379
-REPLICAOF=""
+REPLICAOF=''
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
