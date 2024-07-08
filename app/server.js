@@ -1,44 +1,28 @@
 const net = require('net');
-const process = require('process');
 
-// In-memory key-value store with expiry support
 const store = {};
-
-// Command-line arguments
 const args = process.argv.slice(2);
 let port = 6379;
-let role = 'master';
-let replicaOf = null;
 
-// Initialize master replication ID and offset
-const masterReplId = '8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb'; // Hardcoded replication ID
+const masterReplId = '8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb';
 let masterReplOffset = 0;
 
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--port' && args[i + 1]) {
         port = parseInt(args[i + 1], 10);
-    } else if (args[i] === '--replicaof' && args[i + 1] && args[i + 2]) {
-        role = 'slave';
-        replicaOf = { host: args[i + 1], port: parseInt(args[i + 2], 10) };
     }
 }
 
-console.log(`Starting Redis server on port ${port}`);
-if (role === 'slave') {
-    console.log(`Configured as replica of ${replicaOf.host}:${replicaOf.port}`);
-} else {
-    console.log('Configured as master');
-}
+console.log(`Starting Redis master server on port ${port}`);
 
 const parseRESP = (data) => {
     const lines = data.toString().split('\r\n');
-    const command = lines[2].toUpperCase(); // Command is the third element
-    const args = lines.slice(4, lines.length - 1).filter((_, index) => index % 2 === 0); // Arguments are every second element starting from the fifth
+    const command = lines[2].toUpperCase();
+    const args = lines.slice(4, lines.length - 1).filter((_, index) => index % 2 === 0);
 
     return { command, args };
 };
 
-// Check if a key is expired
 const isExpired = (key) => {
     const record = store[key];
     if (!record) return true;
@@ -67,7 +51,6 @@ const server = net.createServer((socket) => {
             const value = args[1];
             let expiry = null;
 
-            // Handle PX argument
             const pxIndex = args.findIndex(arg => arg.toUpperCase() === 'PX');
             if (pxIndex !== -1 && args[pxIndex + 1]) {
                 const ttl = parseInt(args[pxIndex + 1], 10);
@@ -79,10 +62,7 @@ const server = net.createServer((socket) => {
             store[key] = { value, expiry };
             socket.write('+OK\r\n');
 
-            // Increment master replication offset
-            if (role === 'master') {
-                masterReplOffset += Buffer.byteLength(data);
-            }
+            masterReplOffset += Buffer.byteLength(data);
         } else if (command === 'GET') {
             const key = args[0];
             if (isExpired(key)) {
@@ -92,10 +72,8 @@ const server = net.createServer((socket) => {
                 socket.write(`$${value.length}\r\n${value}\r\n`);
             }
         } else if (command === 'INFO' && args[0].toUpperCase() === 'REPLICATION') {
-            let infoResponse = `role:${role}\r\n`;
-            if (role === 'master') {
-                infoResponse += `master_replid:${masterReplId}\r\nmaster_repl_offset:${masterReplOffset}\r\n`;
-            }
+            let infoResponse = `role:master\r\n`;
+            infoResponse += `master_replid:${masterReplId}\r\nmaster_repl_offset:${masterReplOffset}\r\n`;
             socket.write(`$${infoResponse.length}\r\n${infoResponse}\r\n`);
         } else {
             socket.write('-ERR unknown command\r\n');
@@ -118,5 +96,3 @@ server.on('error', (err) => {
 server.listen(port, () => {
     console.log(`Server listening on port ${port}`);
 });
-
-module.exports = server;

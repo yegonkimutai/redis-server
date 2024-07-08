@@ -14,4 +14,5 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Start the Redis server
-node app/server.js --port $PORT --replicaof $REPLICAOF
+#!/bin/bash
+node app/server.js "$@"
